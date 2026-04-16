@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 // --- API ---
 const API_BASE = "/api";
-async function apiScan() {
-  const res = await fetch(`${API_BASE}/scan`);
+async function apiScan(region = "nationwide") {
+  const res = await fetch(`${API_BASE}/scan?region=${region}`);
   if (res.status === 429) throw new Error("Scan already in progress");
   if (!res.ok) throw new Error(`Scan failed (${res.status})`);
   return res.json();
@@ -11,7 +11,7 @@ async function apiScan() {
 
 // --- Helpers ---
 const stateFromGeo = (geo) => { if (!geo) return ""; const m = geo.match(/,\s*(\w{2})$/); return m ? m[1] : geo; };
-const ALL_STATES = ["MI", "OH", "IL", "IN", "WI", "MN", "IA", "MO"];
+const MW_STATES = ["MI", "OH", "IL", "IN", "WI", "MN", "IA", "MO"];
 const STATE_COLORS = {
   MI: "#4f8fff", OH: "#ff5c5c", IL: "#ff9f43", IN: "#b07cff",
   WI: "#2ed573", MN: "#18dcff", IA: "#ffd32a", MO: "#ff6b9d",
@@ -121,6 +121,7 @@ export default function App() {
   const [newCount, setNewCount] = useState(0);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanPhase, setScanPhase] = useState("");
+  const [region, setRegion] = useState("nationwide");
 
   const phases = ["Connecting to sources...", "Scanning Google News...", "Checking PR Newswire...", "Querying GlobeNewsWire...", "Searching BizJournals...", "Scoring & deduplicating..."];
 
@@ -131,7 +132,7 @@ export default function App() {
     const phaseIv = setInterval(() => { phaseIdx = Math.min(phaseIdx + 1, phases.length - 1); setScanPhase(phases[phaseIdx]); }, 2500);
     const progressIv = setInterval(() => setScanProgress((p) => Math.min(p + Math.random() * 12, 92)), 500);
     try {
-      const data = await apiScan();
+      const data = await apiScan(region);
       clearInterval(phaseIv); clearInterval(progressIv);
       setScanPhase("Complete"); setScanProgress(100);
       setTimeout(() => {
@@ -388,7 +389,7 @@ export default function App() {
             background: "rgba(79,143,255,0.08)", border: "1px solid rgba(79,143,255,0.15)",
           }}>
             <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 2, color: "#4f8fff", textTransform: "uppercase", fontWeight: 500 }}>
-              Midwest Software M&A Intelligence
+              {region === "midwest" ? "Midwest" : "Nationwide"} Software M&A Intelligence
             </span>
           </div>
           <h1 style={{ fontSize: 44, fontWeight: 800, color: "#fff", lineHeight: 1.12, letterSpacing: "-1px", marginBottom: 14 }}>
@@ -398,14 +399,41 @@ export default function App() {
             </span>
           </h1>
           <p style={{ fontSize: 16, color: "rgba(255,255,255,0.5)", lineHeight: 1.7, maxWidth: 540, fontWeight: 400 }}>
-            Real-time monitoring across five public sources for majority-control software transactions across eight Midwest states.
+            Real-time monitoring across five public sources for majority-control
+            software transactions {region === "midwest" ? "across eight Midwest states" : "across the United States"}.
           </p>
         </div>
 
-        {/* State chips */}
+        {/* Region toggle */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 24, animation: "fadeUp 0.8s ease 0.25s forwards", opacity: 0 }}>
+          <div style={{
+            display: "inline-flex", padding: 3, borderRadius: 10,
+            background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
+          }}>
+            {[
+              { key: "nationwide", label: "Nationwide", icon: "🇺🇸" },
+              { key: "midwest", label: "Midwest", icon: "🌾" },
+            ].map((r) => (
+              <button key={r.key} onClick={() => setRegion(r.key)} style={{
+                background: region === r.key ? "rgba(79,143,255,0.12)" : "transparent",
+                border: region === r.key ? "1px solid rgba(79,143,255,0.25)" : "1px solid transparent",
+                color: region === r.key ? "#4f8fff" : "rgba(255,255,255,0.4)",
+                padding: "8px 18px", borderRadius: 8,
+                fontFamily: "'Sora', sans-serif", fontSize: 12, fontWeight: 600,
+                cursor: "pointer", transition: "all 0.25s ease",
+                display: "flex", alignItems: "center", gap: 6,
+                boxShadow: region === r.key ? "0 0 12px rgba(79,143,255,0.08)" : "none",
+              }}>
+                <span style={{ fontSize: 13 }}>{r.icon}</span> {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* State chips — show all discovered states dynamically */}
         <div style={{ display: "flex", gap: 8, marginBottom: 40, flexWrap: "wrap", animation: "fadeUp 0.8s ease 0.3s forwards", opacity: 0 }}>
-          {ALL_STATES.map((st, i) => {
-            const c = STATE_COLORS[st]; const count = stateCounts[st] || 0;
+          {(Object.keys(stateCounts).length > 0 ? Object.keys(stateCounts).sort() : MW_STATES).map((st, i) => {
+            const c = STATE_COLORS[st] || "#4f8fff"; const count = stateCounts[st] || 0;
             return (
               <div key={st} style={{
                 display: "flex", alignItems: "center", gap: 7,
@@ -643,7 +671,7 @@ export default function App() {
             borderTop: "1px solid rgba(79,143,255,0.06)",
           }}>
             <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.25)" }}>
-              {filtered.length} of {deals.length} deals · MI OH IL IN WI MN IA MO
+              {filtered.length} of {deals.length} deals · {region === "midwest" ? "MI OH IL IN WI MN IA MO" : "Nationwide"}
             </span>
             <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.15)" }}>
               DealMonitor v1.0
@@ -664,7 +692,7 @@ export default function App() {
             }}>◈</div>
             <p style={{ fontSize: 20, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 8 }}>Ready to scan</p>
             <p style={{ fontSize: 14, color: "rgba(255,255,255,0.35)", maxWidth: 380, margin: "0 auto", lineHeight: 1.6 }}>
-              Five sources. Eight states. Majority control. Hit the button.
+              Five sources. {region === "midwest" ? "Eight states." : "Fifty states."} Majority control. Hit the button.
             </p>
           </div>
         )}
