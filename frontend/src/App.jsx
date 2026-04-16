@@ -419,6 +419,43 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
       <div style={{ position: "fixed", bottom: "-20%", left: "-10%", width: "35vw", height: "35vw",
         background: "radial-gradient(circle, rgba(46,213,115,0.04) 0%, transparent 65%)", pointerEvents: "none" }} />
 
+      {/* Deal Ticker */}
+      {hasLoaded && deals.length > 0 && (
+        <div style={{
+          position: "relative", zIndex: 20, width: "100%", overflow: "hidden",
+          background: "rgba(79,143,255,0.04)",
+          borderBottom: "1px solid rgba(79,143,255,0.08)",
+          padding: "8px 0",
+        }}>
+          <style>{`
+            @keyframes tickerScroll {
+              0% { transform: translateX(0); }
+              100% { transform: translateX(-50%); }
+            }
+          `}</style>
+          <div style={{
+            display: "flex", gap: 48, whiteSpace: "nowrap",
+            animation: `tickerScroll ${Math.max(deals.length * 3, 20)}s linear infinite`,
+            width: "max-content",
+          }}>
+            {[...deals, ...deals].map((d, i) => {
+              const sc = STATE_COLORS[stateFromGeo(d.geo_match)] || "#4f8fff";
+              return (
+                <span key={`${d.id}-${i}`} style={{
+                  fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.45)",
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                }}>
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: sc, boxShadow: `0 0 6px ${sc}50`, flexShrink: 0 }} />
+                  <span style={{ color: "rgba(255,255,255,0.7)", fontWeight: 600 }}>{d.title.length > 50 ? d.title.slice(0, 50) + "..." : d.title}</span>
+                  {d.deal_price && <span style={{ color: "#2ed573", fontWeight: 700 }}>{d.deal_price}</span>}
+                  <span style={{ color: "rgba(255,255,255,0.25)" }}>{d.geo_match}</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{ position: "relative", zIndex: 10, maxWidth: 1020, margin: "0 auto", padding: "52px 32px 100px" }}>
 
         {/* Nav bar */}
