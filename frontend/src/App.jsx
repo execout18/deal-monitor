@@ -408,6 +408,22 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
           animation: shimmer 1.5s ease infinite;
           border-radius: 12px;
         }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+          .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .deal-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+          .deal-grid > div:nth-child(2),
+          .deal-grid > div:nth-child(3),
+          .deal-grid > div:nth-child(4) { display: none !important; }
+          .deal-meta-mobile { display: flex !important; }
+          .detail-grid { grid-template-columns: 1fr 1fr !important; }
+          .enrich-grid { grid-template-columns: 1fr !important; }
+          .toolbar-row { flex-direction: column !important; align-items: flex-start !important; }
+          .hero-title { font-size: 30px !important; }
+          .main-content { padding: 24px 16px 80px !important; }
+          .nav-bar { margin-bottom: 32px !important; }
+        }
       `}</style>
 
       {/* Animated topo background */}
@@ -456,10 +472,10 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
         </div>
       )}
 
-      <div style={{ position: "relative", zIndex: 10, maxWidth: 1020, margin: "0 auto", padding: "52px 32px 100px" }}>
+      <div className="main-content" style={{ position: "relative", zIndex: 10, maxWidth: 1020, margin: "0 auto", padding: "52px 32px 100px" }}>
 
         {/* Nav bar */}
-        <div style={{
+        <div className="nav-bar" style={{
           display: "flex", justifyContent: "space-between", alignItems: "center",
           marginBottom: 56, animation: "fadeIn 0.8s ease",
           padding: "12px 20px", borderRadius: 12,
@@ -506,7 +522,7 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
               {region === "midwest" ? "Midwest" : "Nationwide"} Software M&A Intelligence
             </span>
           </div>
-          <h1 style={{ fontSize: 44, fontWeight: 800, color: "#fff", lineHeight: 1.12, letterSpacing: "-1px", marginBottom: 14 }}>
+          <h1 className="hero-title" style={{ fontSize: 44, fontWeight: 800, color: "#fff", lineHeight: 1.12, letterSpacing: "-1px", marginBottom: 14 }}>
             Lower Middle Market<br />
             <span style={{ background: "linear-gradient(135deg, #4f8fff, #2ed573)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               Deal Scanner
@@ -648,7 +664,7 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
 
         {/* Stats */}
         {hasLoaded && !loading && deals.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 32, animation: "fadeUp 0.6s ease forwards" }}>
+          <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 32, animation: "fadeUp 0.6s ease forwards" }}>
             {[
               { label: "Total Deals", value: deals.length, color: "#4f8fff" },
               { label: "Avg Score", value: `${Math.round(avgConf * 100)}%`, color: "#2ed573" },
@@ -670,7 +686,7 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
 
         {/* Toolbar */}
         {hasLoaded && !loading && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+          <div className="toolbar-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <button className={`filter-pill ${filterState === "ALL" ? "active" : ""}`} onClick={() => setFilterState("ALL")}>All</button>
               {Object.keys(stateCounts).sort().map((st) => (
@@ -705,7 +721,7 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
                 <div key={deal.id} className="deal-card" style={{ animationDelay: `${idx * 0.07}s` }}
                   onClick={() => setExpandedId(isExpanded ? null : deal.id)}>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px 56px", gap: 20, alignItems: "center" }}>
+                  <div className="deal-grid" style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px 56px", gap: 20, alignItems: "center" }}>
                     {/* Deal info */}
                     <div>
                       <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.45, marginBottom: 10 }}>
@@ -717,6 +733,18 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
                         <span className="chip" style={{ color: "#4f8fff", background: "rgba(79,143,255,0.08)", border: "1px solid rgba(79,143,255,0.15)" }}>{dtype}</span>
                         <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.3)", marginLeft: 4 }}>
                           {deal.source_name} · {formatDiscovered(deal.discovered_at)}
+                        </span>
+                      </div>
+                      {/* Mobile-only price/date/score row */}
+                      <div className="deal-meta-mobile" style={{ display: "none", gap: 12, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
+                        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: deal.deal_price ? "#2ed573" : "rgba(255,255,255,0.25)", fontWeight: 700 }}>
+                          {deal.deal_price || "Undisclosed"}
+                        </span>
+                        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+                          {formatDealDate(deal.deal_date) || "No date"}
+                        </span>
+                        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: deal.confidence >= 0.85 ? "#2ed573" : deal.confidence >= 0.7 ? "#ffd32a" : "#778ca3", fontWeight: 700 }}>
+                          Score: {Math.round(deal.confidence * 100)}
                         </span>
                       </div>
                     </div>
@@ -745,7 +773,7 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
                   {isExpanded && (
                     <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid rgba(79,143,255,0.08)", animation: "fadeUp 0.4s ease forwards" }}>
                       <p style={{ fontSize: 14, lineHeight: 1.8, color: "rgba(255,255,255,0.6)", marginBottom: 22, maxWidth: 700 }}>{deal.summary}</p>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14, marginBottom: 18 }}>
+                      <div className="detail-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14, marginBottom: 18 }}>
                         {[
                           { label: "Buyer", val: deal.buyer },
                           { label: "Target", val: deal.seller },
@@ -822,7 +850,7 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
                             </span>
                           </div>
                           <div style={{ padding: "18px 18px 14px" }}>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                            <div className="enrich-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
                               {[
                                 { label: "Buyer", val: enrichments[deal.id].buyer_name },
                                 { label: "Buyer Type", val: enrichments[deal.id].buyer_type },
