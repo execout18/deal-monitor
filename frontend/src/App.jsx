@@ -451,7 +451,7 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
           `}</style>
           <div style={{
             display: "flex", gap: 48, whiteSpace: "nowrap",
-            animation: `tickerScroll ${Math.max(deals.length * 3, 20)}s linear infinite`,
+            animation: `tickerScroll ${Math.max(deals.length * 8, 60)}s linear infinite`,
             width: "max-content",
           }}>
             {[...deals, ...deals].map((d, i) => {
