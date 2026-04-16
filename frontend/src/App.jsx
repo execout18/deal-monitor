@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
-// --- API layer ---
+// --- API ---
 const API_BASE = "/api";
 async function apiScan() {
   const res = await fetch(`${API_BASE}/scan`);
@@ -8,88 +8,13 @@ async function apiScan() {
   if (!res.ok) throw new Error(`Scan failed (${res.status})`);
   return res.json();
 }
-async function apiGetDeals() {
-  const res = await fetch(`${API_BASE}/scan`);
-  if (!res.ok) throw new Error(`Load failed (${res.status})`);
-  return res.json();
-}
-
-// --- Mock data for local dev only (when running frontend without backend) ---
-const USE_MOCK = typeof window !== "undefined" && window.location.hostname === "localhost" && window.location.port === "3000";
-const MOCK_DEALS = [
-  {
-    id: "d001", title: "Apex Cloud Solutions Acquired by Great Lakes Capital Partners",
-    summary: "Great Lakes Capital Partners has completed its acquisition of Apex Cloud Solutions, a Detroit-based SaaS provider specializing in manufacturing workflow automation. The transaction valued the company at approximately $45 million. Apex serves over 200 mid-market manufacturers across the Great Lakes region with its cloud-native production planning platform.",
-    source_url: "#", source_name: "Crain's Detroit Business", discovered_at: "2026-04-16T08:30:00Z",
-    buyer: "Great Lakes Capital Partners", seller: "Apex Cloud Solutions",
-    geo_match: "Detroit, MI", software_match: "SaaS", deal_match: "acquisition",
-    confidence: 0.92, deal_price: "$45M", deal_date: "2026-04-14",
-  },
-  {
-    id: "d002", title: "Buckeye Software Group Announces Majority Recapitalization",
-    summary: "Columbus-based Buckeye Software Group, a vertical SaaS platform for regional banking compliance, has completed a majority recapitalization with Midwest Growth Equity. The founder retains a significant minority stake and will continue as CEO. Revenue is estimated between $8M-$12M ARR.",
-    source_url: "#", source_name: "BizJournals Columbus", discovered_at: "2026-04-15T14:20:00Z",
-    buyer: "Midwest Growth Equity", seller: "Buckeye Software Group",
-    geo_match: "Columbus, OH", software_match: "vertical SaaS", deal_match: "recapitalization",
-    confidence: 0.88, deal_price: null, deal_date: "2026-04-12",
-  },
-  {
-    id: "d003", title: "Prairie Logistics Tech Purchased by Strategic Acquirer",
-    summary: "Prairie Logistics Tech, a Minneapolis-based provider of last-mile delivery optimization software, has been acquired by a publicly traded logistics company in an all-cash transaction. Terms were not disclosed. Prairie's 45-person team will be retained and operate as an independent division.",
-    source_url: "#", source_name: "Minneapolis Star Tribune", discovered_at: "2026-04-15T09:45:00Z",
-    buyer: "Undisclosed Strategic", seller: "Prairie Logistics Tech",
-    geo_match: "Minneapolis, MN", software_match: "software", deal_match: "acquired",
-    confidence: 0.81, deal_price: null, deal_date: null,
-  },
-  {
-    id: "d004", title: "Heartland MSP Holdings Completes Third Add-On in 2026",
-    summary: "Heartland MSP Holdings, a PE-backed managed services platform based in Indianapolis, has acquired SecureNet IT of Milwaukee for $18.5 million. This tuck-in acquisition expands Heartland's footprint into Wisconsin and adds approximately $3M in recurring revenue.",
-    source_url: "#", source_name: "PR Newswire", discovered_at: "2026-04-14T16:10:00Z",
-    buyer: "Heartland MSP Holdings", seller: "SecureNet IT",
-    geo_match: "Milwaukee, WI", software_match: "managed services", deal_match: "add-on",
-    confidence: 0.85, deal_price: "$18.5M", deal_date: "2026-04-10",
-  },
-  {
-    id: "d005", title: "Chicago Fintech DataBridge Enters Definitive Agreement",
-    summary: "DataBridge Financial Technologies has entered a definitive agreement to be acquired by a national banking technology provider for approximately $120 million. The Chicago-based fintech provides real-time payment reconciliation for mid-market financial institutions. The transaction is expected to close in Q3 2026.",
-    source_url: "#", source_name: "GlobeNewsWire", discovered_at: "2026-04-14T11:30:00Z",
-    buyer: "Undisclosed", seller: "DataBridge Financial Technologies",
-    geo_match: "Chicago, IL", software_match: "fintech", deal_match: "acquisition",
-    confidence: 0.77, deal_price: "$120M", deal_date: "2026-07-01",
-  },
-  {
-    id: "d006", title: "Iowa AgTech Platform Acquired in Management Buyout",
-    summary: "CropSync Analytics, a Des Moines-based precision agriculture software company, has completed a management buyout backed by regional mezzanine financing. The founder-CEO led the buyout after declining a competing strategic offer. The platform serves over 500 farms across Iowa, Missouri, and Minnesota.",
-    source_url: "#", source_name: "BizJournals Des Moines", discovered_at: "2026-04-13T13:00:00Z",
-    buyer: "Management Team (MBO)", seller: "CropSync Analytics",
-    geo_match: "Des Moines, IA", software_match: "software", deal_match: "management buyout",
-    confidence: 0.73, deal_price: null, deal_date: "2026-04-08",
-  },
-  {
-    id: "d007", title: "Grand Rapids ERP Firm Joins National Platform",
-    summary: "Lakeshore Systems, a Grand Rapids-based ERP implementation and customization firm, has been acquired as a platform investment by a newly formed holding company for $32 million. The deal includes earnout provisions tied to recurring revenue growth targets over 36 months.",
-    source_url: "#", source_name: "Crain's Grand Rapids", discovered_at: "2026-04-12T10:15:00Z",
-    buyer: "Undisclosed Holding Co.", seller: "Lakeshore Systems",
-    geo_match: "Grand Rapids, MI", software_match: "ERP", deal_match: "platform acquisition",
-    confidence: 0.86, deal_price: "$32M", deal_date: "2026-04-05",
-  },
-  {
-    id: "d008", title: "Indiana Cybersecurity Startup Acquired by Palo Alto Networks",
-    summary: "ThreatMesh, an Indianapolis-based cybersecurity startup focused on OT/IoT network monitoring for manufacturing, has been acquired by Palo Alto Networks. The deal reportedly valued the company between $65-75 million. ThreatMesh had raised $12M in prior funding.",
-    source_url: "#", source_name: "SEC EDGAR (8-K)", discovered_at: "2026-04-11T08:00:00Z",
-    buyer: "Palo Alto Networks", seller: "ThreatMesh",
-    geo_match: "Indianapolis, IN", software_match: "cybersecurity", deal_match: "acquired",
-    confidence: 0.94, deal_price: "$65-75M", deal_date: "2026-04-09",
-  },
-];
-const mockFetch = () => new Promise((r) => setTimeout(() => r({ deals: MOCK_DEALS, new_count: MOCK_DEALS.length, scan_time: new Date().toISOString(), total_count: MOCK_DEALS.length, stats: {} }), 1800));
 
 // --- Helpers ---
 const stateFromGeo = (geo) => { if (!geo) return ""; const m = geo.match(/,\s*(\w{2})$/); return m ? m[1] : geo; };
 const ALL_STATES = ["MI", "OH", "IL", "IN", "WI", "MN", "IA", "MO"];
 const STATE_COLORS = {
-  MI: "#3b82f6", OH: "#ef4444", IL: "#f97316", IN: "#a78bfa",
-  WI: "#22c55e", MN: "#06b6d4", IA: "#eab308", MO: "#ec4899",
+  MI: "#4f8fff", OH: "#ff5c5c", IL: "#ff9f43", IN: "#b07cff",
+  WI: "#2ed573", MN: "#18dcff", IA: "#ffd32a", MO: "#ff6b9d",
 };
 const dealTypeLabel = (m) => {
   const s = (m || "").toLowerCase();
@@ -117,27 +42,69 @@ const formatDiscovered = (iso) => {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
 
-// --- Confidence Ring ---
-function ConfidenceRing({ value, size = 46 }) {
+// --- Animated Confidence Ring ---
+function ConfidenceRing({ value, size = 50, delay = 0 }) {
+  const [animated, setAnimated] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setAnimated(true), delay + 300); return () => clearTimeout(t); }, [delay]);
   const pct = Math.round(value * 100);
-  const r = (size - 6) / 2;
+  const r = (size - 7) / 2;
   const circ = 2 * Math.PI * r;
-  const offset = circ * (1 - value);
-  const color = value >= 0.85 ? "#10b981" : value >= 0.7 ? "#f59e0b" : "#64748b";
+  const offset = animated ? circ * (1 - value) : circ;
+  const color = value >= 0.85 ? "#2ed573" : value >= 0.7 ? "#ffd32a" : "#778ca3";
+  const glow = value >= 0.85 ? "0 0 12px rgba(46,213,115,0.4)" : value >= 0.7 ? "0 0 12px rgba(255,211,42,0.3)" : "none";
   return (
-    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0, filter: `drop-shadow(${glow})` }}>
       <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="3" />
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="3"
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3.5" />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="3.5"
           strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)" }} />
+          style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(0.34,1.56,0.64,1)" }} />
       </svg>
-      <div style={{
-        position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color, fontFamily: "'DM Sans', sans-serif", lineHeight: 1 }}>{pct}</span>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: 14, fontWeight: 800, color, fontFamily: "'Sora', sans-serif", lineHeight: 1 }}>{pct}</span>
       </div>
     </div>
+  );
+}
+
+// --- Animated Counter ---
+function Counter({ end, duration = 800, delay = 0 }) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      let start = 0; const startTime = Date.now();
+      const tick = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        setVal(Math.round(eased * end));
+        if (progress < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }, delay);
+    return () => clearTimeout(t);
+  }, [end, duration, delay]);
+  return <>{val}</>;
+}
+
+// --- Topographic Background ---
+function TopoBG() {
+  return (
+    <svg style={{ position: "fixed", inset: 0, width: "100%", height: "100%", opacity: 0.04, pointerEvents: "none" }}
+      viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <filter id="glow"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      {[...Array(12)].map((_, i) => (
+        <ellipse key={i} cx={500 + Math.sin(i * 0.8) * 200} cy={300 + Math.cos(i * 0.6) * 150}
+          rx={100 + i * 30} ry={60 + i * 20} fill="none" stroke="#4f8fff"
+          strokeWidth={0.8} opacity={0.5 - i * 0.03} filter="url(#glow)">
+          <animateTransform attributeName="transform" type="rotate"
+            from={`${i * 30} 500 300`} to={`${i * 30 + 360} 500 300`}
+            dur={`${60 + i * 10}s`} repeatCount="indefinite"/>
+        </ellipse>
+      ))}
+    </svg>
   );
 }
 
@@ -153,21 +120,28 @@ export default function App() {
   const [lastScan, setLastScan] = useState(null);
   const [newCount, setNewCount] = useState(0);
   const [scanProgress, setScanProgress] = useState(0);
+  const [scanPhase, setScanPhase] = useState("");
+
+  const phases = ["Connecting to sources...", "Scanning Google News...", "Checking PR Newswire...", "Querying GlobeNewsWire...", "Searching BizJournals...", "Scoring & deduplicating..."];
 
   const runScan = async () => {
     setLoading(true); setError(null); setExpandedId(null); setNewCount(0); setScanProgress(0);
-    const iv = setInterval(() => setScanProgress((p) => Math.min(p + Math.random() * 15, 90)), 400);
+    let phaseIdx = 0;
+    setScanPhase(phases[0]);
+    const phaseIv = setInterval(() => { phaseIdx = Math.min(phaseIdx + 1, phases.length - 1); setScanPhase(phases[phaseIdx]); }, 2500);
+    const progressIv = setInterval(() => setScanProgress((p) => Math.min(p + Math.random() * 12, 92)), 500);
     try {
-      const data = USE_MOCK ? await mockFetch() : await apiScan();
-      setScanProgress(100);
+      const data = await apiScan();
+      clearInterval(phaseIv); clearInterval(progressIv);
+      setScanPhase("Complete"); setScanProgress(100);
       setTimeout(() => {
         setDeals(data.deals || []); setLastScan(data.scan_time);
-        setNewCount(data.new_count || 0); setHasLoaded(true); setLoading(false); setScanProgress(0);
-      }, 300);
+        setNewCount(data.new_count || 0); setHasLoaded(true); setLoading(false); setScanProgress(0); setScanPhase("");
+      }, 500);
     } catch (err) {
-      setError(err.message); setLoading(false); setScanProgress(0);
-      if (!USE_MOCK) try { const d = await apiGetDeals(); if (d.deals?.length) { setDeals(d.deals); setHasLoaded(true); } } catch {}
-    } finally { clearInterval(iv); }
+      clearInterval(phaseIv); clearInterval(progressIv);
+      setError(err.message); setLoading(false); setScanProgress(0); setScanPhase("");
+    }
   };
 
   const filtered = deals
@@ -180,144 +154,360 @@ export default function App() {
         const pb = b.deal_price ? parseFloat(b.deal_price.replace(/[^0-9.]/g, "")) : -1;
         return pb - pa;
       }
-      return a.title.localeCompare(b.title);
+      return 0;
     });
 
   const stateCounts = {};
   deals.forEach((d) => { const s = stateFromGeo(d.geo_match); stateCounts[s] = (stateCounts[s] || 0) + 1; });
   const totalWithPrice = deals.filter((d) => d.deal_price).length;
-  const avgConf = deals.length ? (deals.reduce((a, d) => a + d.confidence, 0) / deals.length) : 0;
+  const avgConf = deals.length ? deals.reduce((a, d) => a + d.confidence, 0) / deals.length : 0;
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: "linear-gradient(165deg, #06080f 0%, #0c1220 40%, #0a0f1a 100%)",
-      color: "#c8cdd6", fontFamily: "'DM Sans', 'Satoshi', sans-serif", position: "relative",
-    }}>
+    <div style={{ minHeight: "100vh", background: "#070b14", color: "#e0e6ed", fontFamily: "'Sora', sans-serif", position: "relative", overflow: "hidden" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@300;400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 10px; }
-        body { background: #06080f; }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        body { background: #070b14; margin: 0; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(79,143,255,0.15); border-radius: 10px; }
+
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-        @keyframes progressGlow { 0%, 100% { box-shadow: 0 0 8px rgba(99,220,190,0.3); } 50% { box-shadow: 0 0 20px rgba(99,220,190,0.6); } }
-        .glass { background: rgba(255,255,255,0.02); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.04); }
-        .deal-row { cursor: pointer; transition: all 0.25s cubic-bezier(0.4,0,0.2,1); position: relative; animation: fadeUp 0.5s ease forwards; opacity: 0; }
-        .deal-row:hover { background: rgba(255,255,255,0.035) !important; }
-        .deal-row::after { content: ''; position: absolute; bottom: 0; left: 24px; right: 24px; height: 1px; background: rgba(255,255,255,0.04); }
-        .deal-row:last-child::after { display: none; }
-        .scan-btn { background: linear-gradient(135deg, rgba(99,220,190,0.12) 0%, rgba(99,220,190,0.06) 100%); border: 1px solid rgba(99,220,190,0.25); color: #63dcbe; padding: 12px 32px; font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; letter-spacing: 2.5px; text-transform: uppercase; cursor: pointer; transition: all 0.3s ease; border-radius: 6px; }
-        .scan-btn:hover { background: linear-gradient(135deg, rgba(99,220,190,0.18) 0%, rgba(99,220,190,0.1) 100%); border-color: rgba(99,220,190,0.4); box-shadow: 0 4px 24px rgba(99,220,190,0.12); transform: translateY(-1px); }
-        .scan-btn:disabled { border-color: rgba(255,255,255,0.06); color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.02); cursor: not-allowed; transform: none; box-shadow: none; }
-        .chip { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 400; letter-spacing: 0.5px; padding: 3px 10px; border-radius: 4px; white-space: nowrap; }
-        .filter-pill { background: transparent; border: 1px solid rgba(255,255,255,0.06); color: rgba(255,255,255,0.3); padding: 6px 14px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 400; letter-spacing: 0.8px; cursor: pointer; transition: all 0.2s ease; border-radius: 100px; }
-        .filter-pill:hover { border-color: rgba(255,255,255,0.12); color: rgba(255,255,255,0.5); }
-        .filter-pill.active { border-color: rgba(99,220,190,0.3); color: #63dcbe; background: rgba(99,220,190,0.06); }
-        .sort-tab { background: none; border: none; color: rgba(255,255,255,0.2); padding: 6px 12px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 400; letter-spacing: 0.8px; cursor: pointer; transition: color 0.2s ease; text-transform: uppercase; }
-        .sort-tab:hover { color: rgba(255,255,255,0.5); } .sort-tab.active { color: #63dcbe; }
-        .data-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.15); margin-bottom: 4px; }
-        .data-value { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.85); }
-        .data-value.muted { color: rgba(255,255,255,0.18); font-style: italic; font-weight: 400; }
-        .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.02) 75%); background-size: 200% 100%; animation: shimmer 1.8s ease infinite; border-radius: 6px; }
-        .stat-card { padding: 16px 20px; border-radius: 8px; background: rgba(255,255,255,0.015); border: 1px solid rgba(255,255,255,0.03); }
+        @keyframes borderGlow {
+          0%, 100% { border-color: rgba(79,143,255,0.15); }
+          50% { border-color: rgba(79,143,255,0.35); }
+        }
+        @keyframes scanPulse {
+          0% { box-shadow: 0 0 0 0 rgba(79,143,255,0.3); }
+          70% { box-shadow: 0 0 0 12px rgba(79,143,255,0); }
+          100% { box-shadow: 0 0 0 0 rgba(79,143,255,0); }
+        }
+        @keyframes gradientShift {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        @keyframes typewriter { from { width: 0; } to { width: 100%; } }
+
+        .deal-card {
+          background: linear-gradient(135deg, rgba(15,22,40,0.8) 0%, rgba(10,16,30,0.9) 100%);
+          border: 1px solid rgba(79,143,255,0.08);
+          border-radius: 12px;
+          padding: 22px 26px;
+          cursor: pointer;
+          transition: all 0.35s cubic-bezier(0.25,0.46,0.45,0.94);
+          position: relative;
+          overflow: hidden;
+          animation: fadeUp 0.6s ease forwards;
+          opacity: 0;
+        }
+        .deal-card::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(79,143,255,0.2), transparent);
+          opacity: 0;
+          transition: opacity 0.35s ease;
+        }
+        .deal-card:hover {
+          border-color: rgba(79,143,255,0.2);
+          transform: translateY(-2px);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(79,143,255,0.1);
+        }
+        .deal-card:hover::before { opacity: 1; }
+
+        .scan-btn {
+          background: linear-gradient(135deg, #4f8fff 0%, #3b6fd4 100%);
+          border: none;
+          color: #fff;
+          padding: 14px 40px;
+          font-family: 'Sora', sans-serif;
+          font-size: 13px;
+          font-weight: 600;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          border-radius: 8px;
+          position: relative;
+          overflow: hidden;
+          box-shadow: 0 4px 16px rgba(79,143,255,0.25);
+        }
+        .scan-btn::after {
+          content: '';
+          position: absolute;
+          top: -50%; left: -50%;
+          width: 200%; height: 200%;
+          background: linear-gradient(transparent, rgba(255,255,255,0.1), transparent);
+          transform: rotate(45deg);
+          transition: transform 0.6s ease;
+        }
+        .scan-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 32px rgba(79,143,255,0.35);
+        }
+        .scan-btn:hover::after { transform: rotate(45deg) translateY(-100%); }
+        .scan-btn:active { transform: translateY(0); }
+        .scan-btn:disabled {
+          background: rgba(79,143,255,0.15);
+          color: rgba(255,255,255,0.4);
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+
+        .chip {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 10px;
+          font-weight: 500;
+          letter-spacing: 0.3px;
+          padding: 4px 10px;
+          border-radius: 6px;
+          white-space: nowrap;
+          transition: all 0.2s ease;
+        }
+
+        .filter-pill {
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.08);
+          color: rgba(255,255,255,0.5);
+          padding: 7px 16px;
+          font-family: 'Sora', sans-serif;
+          font-size: 11px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.25s ease;
+          border-radius: 8px;
+        }
+        .filter-pill:hover { border-color: rgba(79,143,255,0.25); color: rgba(255,255,255,0.8); background: rgba(79,143,255,0.05); }
+        .filter-pill.active {
+          border-color: rgba(79,143,255,0.4);
+          color: #4f8fff;
+          background: rgba(79,143,255,0.08);
+          box-shadow: 0 0 12px rgba(79,143,255,0.1);
+        }
+
+        .sort-tab {
+          background: none; border: none;
+          color: rgba(255,255,255,0.35);
+          padding: 6px 14px;
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 10px; font-weight: 500;
+          letter-spacing: 1px; cursor: pointer;
+          transition: all 0.2s ease;
+          text-transform: uppercase;
+          border-radius: 6px;
+        }
+        .sort-tab:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.03); }
+        .sort-tab.active { color: #4f8fff; background: rgba(79,143,255,0.08); }
+
+        .stat-card {
+          padding: 20px 24px;
+          border-radius: 12px;
+          background: linear-gradient(135deg, rgba(15,22,40,0.6) 0%, rgba(10,16,30,0.8) 100%);
+          border: 1px solid rgba(79,143,255,0.08);
+          transition: all 0.3s ease;
+          position: relative;
+          overflow: hidden;
+        }
+        .stat-card::after {
+          content: '';
+          position: absolute;
+          bottom: 0; left: 20%; right: 20%;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(79,143,255,0.15), transparent);
+        }
+        .stat-card:hover { border-color: rgba(79,143,255,0.2); transform: translateY(-1px); }
+
+        .skeleton {
+          background: linear-gradient(90deg, rgba(79,143,255,0.03) 25%, rgba(79,143,255,0.08) 50%, rgba(79,143,255,0.03) 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s ease infinite;
+          border-radius: 12px;
+        }
       `}</style>
 
-      {/* Ambient glows */}
-      <div style={{ position: "fixed", top: "-20%", right: "-10%", width: "50vw", height: "50vw", background: "radial-gradient(circle, rgba(99,220,190,0.03) 0%, transparent 70%)", pointerEvents: "none" }} />
-      <div style={{ position: "fixed", bottom: "-20%", left: "-10%", width: "40vw", height: "40vw", background: "radial-gradient(circle, rgba(59,130,246,0.02) 0%, transparent 70%)", pointerEvents: "none" }} />
+      {/* Animated topo background */}
+      <TopoBG />
 
-      <div style={{ position: "relative", zIndex: 10, maxWidth: 1000, margin: "0 auto", padding: "48px 28px 80px" }}>
+      {/* Gradient orbs */}
+      <div style={{ position: "fixed", top: "-15%", right: "-5%", width: "45vw", height: "45vw",
+        background: "radial-gradient(circle, rgba(79,143,255,0.06) 0%, transparent 65%)", pointerEvents: "none" }} />
+      <div style={{ position: "fixed", bottom: "-20%", left: "-10%", width: "35vw", height: "35vw",
+        background: "radial-gradient(circle, rgba(46,213,115,0.04) 0%, transparent 65%)", pointerEvents: "none" }} />
 
-        {/* Top bar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 48, animation: "fadeIn 0.6s ease" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: "linear-gradient(135deg, #63dcbe 0%, #3b82f6 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#06080f" }}>D</div>
-            <span style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.7)", letterSpacing: 0.5 }}>DealMonitor</span>
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: 1.5, color: "rgba(255,255,255,0.12)", textTransform: "uppercase", marginLeft: 4 }}>Beta</span>
-          </div>
+      <div style={{ position: "relative", zIndex: 10, maxWidth: 1020, margin: "0 auto", padding: "52px 32px 100px" }}>
+
+        {/* Nav bar */}
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          marginBottom: 56, animation: "fadeIn 0.8s ease",
+          padding: "12px 20px", borderRadius: 12,
+          background: "rgba(10,16,30,0.5)", backdropFilter: "blur(20px)",
+          border: "1px solid rgba(79,143,255,0.06)",
+        }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: hasLoaded ? "#63dcbe" : error ? "#ef4444" : "rgba(255,255,255,0.15)", boxShadow: hasLoaded ? "0 0 8px rgba(99,220,190,0.4)" : "none", animation: loading ? "pulse 1.2s ease infinite" : "none" }} />
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 1, color: "rgba(255,255,255,0.2)" }}>
-              {loading ? "SCANNING" : hasLoaded ? "CONNECTED" : "STANDBY"}
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: "linear-gradient(135deg, #4f8fff 0%, #2ed573 100%)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 15, fontWeight: 800, color: "#070b14",
+              boxShadow: "0 4px 12px rgba(79,143,255,0.3)",
+            }}>D</div>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: 0.3 }}>DealMonitor</span>
+            <span style={{
+              fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, letterSpacing: 1.5,
+              color: "#4f8fff", textTransform: "uppercase",
+              padding: "2px 8px", borderRadius: 4,
+              background: "rgba(79,143,255,0.1)", border: "1px solid rgba(79,143,255,0.15)",
+            }}>Beta</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{
+              width: 7, height: 7, borderRadius: "50%",
+              background: hasLoaded ? "#2ed573" : error ? "#ff5c5c" : "rgba(255,255,255,0.2)",
+              boxShadow: hasLoaded ? "0 0 10px rgba(46,213,115,0.5)" : "none",
+              animation: loading ? "scanPulse 1.5s ease infinite" : "none",
+            }} />
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 0.8, color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>
+              {loading ? "SCANNING" : hasLoaded ? "LIVE" : "READY"}
             </span>
           </div>
         </div>
 
         {/* Hero */}
-        <div style={{ marginBottom: 48, animation: "fadeUp 0.6s ease 0.1s forwards", opacity: 0 }}>
-          <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 2, color: "#63dcbe", textTransform: "uppercase", marginBottom: 12, fontWeight: 400 }}>Midwest Software M&A Intelligence</p>
-          <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 38, fontWeight: 700, color: "rgba(255,255,255,0.92)", lineHeight: 1.15, letterSpacing: "-0.5px", marginBottom: 10, maxWidth: 600 }}>
-            Lower Middle Market<br />Deal Scanner
+        <div style={{ marginBottom: 52, animation: "fadeUp 0.8s ease 0.15s forwards", opacity: 0 }}>
+          <div style={{
+            display: "inline-block", marginBottom: 16,
+            padding: "6px 16px", borderRadius: 100,
+            background: "rgba(79,143,255,0.08)", border: "1px solid rgba(79,143,255,0.15)",
+          }}>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 2, color: "#4f8fff", textTransform: "uppercase", fontWeight: 500 }}>
+              Midwest Software M&A Intelligence
+            </span>
+          </div>
+          <h1 style={{ fontSize: 44, fontWeight: 800, color: "#fff", lineHeight: 1.12, letterSpacing: "-1px", marginBottom: 14 }}>
+            Lower Middle Market<br />
+            <span style={{ background: "linear-gradient(135deg, #4f8fff, #2ed573)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              Deal Scanner
+            </span>
           </h1>
-          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.3)", lineHeight: 1.6, maxWidth: 520 }}>
-            Real-time monitoring across 5 public sources for majority-control transactions in software and technology across eight Midwest states.
+          <p style={{ fontSize: 16, color: "rgba(255,255,255,0.5)", lineHeight: 1.7, maxWidth: 540, fontWeight: 400 }}>
+            Real-time monitoring across five public sources for majority-control software transactions across eight Midwest states.
           </p>
         </div>
 
-        {/* State coverage */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 36, flexWrap: "wrap", animation: "fadeUp 0.6s ease 0.2s forwards", opacity: 0 }}>
-          {ALL_STATES.map((st) => {
+        {/* State chips */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 40, flexWrap: "wrap", animation: "fadeUp 0.8s ease 0.3s forwards", opacity: 0 }}>
+          {ALL_STATES.map((st, i) => {
             const c = STATE_COLORS[st]; const count = stateCounts[st] || 0;
             return (
-              <div key={st} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 100, background: count > 0 ? `${c}10` : "rgba(255,255,255,0.015)", border: `1px solid ${count > 0 ? c + "25" : "rgba(255,255,255,0.03)"}`, transition: "all 0.4s ease" }}>
-                <div style={{ width: 5, height: 5, borderRadius: "50%", background: count > 0 ? c : "rgba(255,255,255,0.1)", transition: "all 0.4s ease" }} />
-                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, fontWeight: 500, color: count > 0 ? c : "rgba(255,255,255,0.15)", letterSpacing: 0.5 }}>
-                  {st}{count > 0 && <span style={{ opacity: 0.6, marginLeft: 3 }}>{count}</span>}
+              <div key={st} style={{
+                display: "flex", alignItems: "center", gap: 7,
+                padding: "6px 14px", borderRadius: 8,
+                background: count > 0 ? `${c}12` : "rgba(255,255,255,0.02)",
+                border: `1px solid ${count > 0 ? c + "30" : "rgba(255,255,255,0.06)"}`,
+                transition: "all 0.4s ease",
+                animation: hasLoaded && count > 0 ? `slideIn 0.4s ease ${i * 0.05}s forwards` : "none",
+              }}>
+                <div style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: count > 0 ? c : "rgba(255,255,255,0.15)",
+                  boxShadow: count > 0 ? `0 0 8px ${c}50` : "none",
+                  transition: "all 0.4s ease",
+                }} />
+                <span style={{
+                  fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 600,
+                  color: count > 0 ? c : "rgba(255,255,255,0.25)", letterSpacing: 0.5,
+                }}>
+                  {st}{count > 0 && <span style={{ opacity: 0.7, marginLeft: 4 }}>{count}</span>}
                 </span>
               </div>
             );
           })}
         </div>
 
-        {/* Scan button */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 12, animation: "fadeUp 0.6s ease 0.3s forwards", opacity: 0 }}>
+        {/* Scan button + status */}
+        <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 16, animation: "fadeUp 0.8s ease 0.4s forwards", opacity: 0 }}>
           <button className="scan-btn" onClick={runScan} disabled={loading}>
             {loading ? "Scanning..." : "Run Scan"}
           </button>
-          {lastScan && !loading && (
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.15)", letterSpacing: 0.5 }}>
-              {new Date(lastScan).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-              {newCount > 0 && <span style={{ color: "#63dcbe", marginLeft: 8 }}>+{newCount} new</span>}
-            </span>
-          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {lastScan && !loading && (
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
+                {new Date(lastScan).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+            {newCount > 0 && !loading && (
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#2ed573", fontWeight: 600 }}>
+                +{newCount} new deal{newCount !== 1 ? "s" : ""} found
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Progress */}
+        {/* Progress bar with phase text */}
         {loading && (
-          <div style={{ height: 2, background: "rgba(255,255,255,0.03)", borderRadius: 1, marginBottom: 36, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${scanProgress}%`, background: "linear-gradient(90deg, #63dcbe, #3b82f6)", borderRadius: 1, transition: "width 0.4s ease", animation: "progressGlow 2s ease infinite" }} />
+          <div style={{ marginBottom: 40, animation: "fadeIn 0.3s ease" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#4f8fff", fontWeight: 500 }}>
+                {scanPhase}
+              </span>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.3)" }}>
+                {Math.round(scanProgress)}%
+              </span>
+            </div>
+            <div style={{ height: 3, background: "rgba(79,143,255,0.08)", borderRadius: 2, overflow: "hidden" }}>
+              <div style={{
+                height: "100%", width: `${scanProgress}%`, borderRadius: 2,
+                background: "linear-gradient(90deg, #4f8fff, #2ed573)",
+                boxShadow: "0 0 16px rgba(79,143,255,0.4)",
+                transition: "width 0.5s ease",
+              }} />
+            </div>
           </div>
         )}
-        {!loading && <div style={{ height: 2, marginBottom: 36 }} />}
+        {!loading && <div style={{ height: 3, marginBottom: 40 }} />}
 
         {error && (
-          <div className="glass" style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 8, borderColor: "rgba(239,68,68,0.15)", background: "rgba(239,68,68,0.04)" }}>
-            <span style={{ fontSize: 13, color: "#fca5a5" }}>⚠ {error}</span>
+          <div style={{
+            marginBottom: 28, padding: "16px 22px", borderRadius: 12,
+            background: "rgba(255,92,92,0.06)", border: "1px solid rgba(255,92,92,0.15)",
+          }}>
+            <span style={{ fontSize: 13, color: "#ff8a8a", fontWeight: 500 }}>⚠ {error}</span>
           </div>
         )}
 
         {loading && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {[0, 1, 2, 3, 4].map((i) => (<div key={i} className="skeleton" style={{ height: 82, animationDelay: `${i * 0.2}s` }} />))}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="skeleton" style={{ height: 90, animationDelay: `${i * 0.2}s` }} />
+            ))}
           </div>
         )}
 
         {/* Stats */}
         {hasLoaded && !loading && deals.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28, animation: "fadeUp 0.5s ease forwards" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 32, animation: "fadeUp 0.6s ease forwards" }}>
             {[
-              { label: "Total Deals", value: deals.length },
-              { label: "Avg Score", value: `${Math.round(avgConf * 100)}%` },
-              { label: "Price Disclosed", value: `${totalWithPrice} of ${deals.length}` },
-              { label: "States Active", value: Object.keys(stateCounts).length },
-            ].map((s) => (
-              <div key={s.label} className="stat-card">
-                <div className="data-label">{s.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>{s.value}</div>
+              { label: "Total Deals", value: deals.length, color: "#4f8fff" },
+              { label: "Avg Score", value: `${Math.round(avgConf * 100)}%`, color: "#2ed573" },
+              { label: "Price Disclosed", value: `${totalWithPrice}/${deals.length}`, color: "#ffd32a" },
+              { label: "States Active", value: Object.keys(stateCounts).length, color: "#ff6b9d" },
+            ].map((s, i) => (
+              <div key={s.label} className="stat-card" style={{ animationDelay: `${i * 0.08}s` }}>
+                <div style={{
+                  fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, letterSpacing: 1.8,
+                  textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 8, fontWeight: 500,
+                }}>{s.label}</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: s.color, lineHeight: 1 }}>
+                  {typeof s.value === "number" ? <Counter end={s.value} delay={i * 100} /> : s.value}
+                </div>
               </div>
             ))}
           </div>
@@ -325,14 +515,14 @@ export default function App() {
 
         {/* Toolbar */}
         {hasLoaded && !loading && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <button className={`filter-pill ${filterState === "ALL" ? "active" : ""}`} onClick={() => setFilterState("ALL")}>All</button>
               {Object.keys(stateCounts).sort().map((st) => (
                 <button key={st} className={`filter-pill ${filterState === st ? "active" : ""}`} onClick={() => setFilterState(st)}>{st}</button>
               ))}
             </div>
-            <div style={{ display: "flex", gap: 0 }}>
+            <div style={{ display: "flex", gap: 2 }}>
               {[{ key: "confidence", label: "Score" }, { key: "date", label: "Date" }, { key: "price", label: "Price" }].map((s) => (
                 <button key={s.key} className={`sort-tab ${sortBy === s.key ? "active" : ""}`} onClick={() => setSortBy(s.key)}>{s.label}</button>
               ))}
@@ -342,80 +532,101 @@ export default function App() {
 
         {/* Deal list */}
         {hasLoaded && !loading && (
-          <div className="glass" style={{ borderRadius: 10, overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 110px 56px", padding: "12px 24px", borderBottom: "1px solid rgba(255,255,255,0.04)", gap: 16 }}>
-              {["Deal", "Price", "Close Date", "Score"].map((h) => (
-                <span key={h} style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(255,255,255,0.12)", fontWeight: 400, textAlign: h === "Score" ? "center" : "left" }}>{h}</span>
-              ))}
-            </div>
-
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {filtered.length === 0 && (
               <div style={{ textAlign: "center", padding: "60px 20px" }}>
-                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.15)" }}>
-                  {filterState !== "ALL" ? `No deals in ${filterState}` : "No deals matched the criteria"}
+                <p style={{ fontSize: 15, color: "rgba(255,255,255,0.3)" }}>
+                  {filterState !== "ALL" ? `No deals in ${filterState}` : "No matching deals found"}
                 </p>
               </div>
             )}
 
             {filtered.map((deal, idx) => {
               const stCode = stateFromGeo(deal.geo_match);
-              const sc = STATE_COLORS[stCode] || "#64748b";
+              const sc = STATE_COLORS[stCode] || "#778ca3";
               const isExpanded = expandedId === deal.id;
               const dtype = dealTypeLabel(deal.deal_match);
               return (
-                <div key={deal.id} className="deal-row" style={{ animationDelay: `${idx * 0.05}s` }}
+                <div key={deal.id} className="deal-card" style={{ animationDelay: `${idx * 0.07}s` }}
                   onClick={() => setExpandedId(isExpanded ? null : deal.id)}>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 110px 56px", padding: "18px 24px", gap: 16, alignItems: "center" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px 56px", gap: 20, alignItems: "center" }}>
+                    {/* Deal info */}
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.88)", lineHeight: 1.4, marginBottom: 7 }}>{deal.title}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.45, marginBottom: 10 }}>
+                        {deal.title}
+                      </div>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                        <span className="chip" style={{ color: sc, background: `${sc}10`, border: `1px solid ${sc}20` }}>{deal.geo_match}</span>
-                        <span className="chip" style={{ color: "rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}>{deal.software_match}</span>
-                        <span className="chip" style={{ color: "rgba(99,220,190,0.6)", background: "rgba(99,220,190,0.04)", border: "1px solid rgba(99,220,190,0.1)" }}>{dtype}</span>
-                        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.12)", marginLeft: 4 }}>{deal.source_name} · {formatDiscovered(deal.discovered_at)}</span>
+                        <span className="chip" style={{ color: sc, background: `${sc}15`, border: `1px solid ${sc}25` }}>{deal.geo_match}</span>
+                        <span className="chip" style={{ color: "rgba(255,255,255,0.65)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>{deal.software_match}</span>
+                        <span className="chip" style={{ color: "#4f8fff", background: "rgba(79,143,255,0.08)", border: "1px solid rgba(79,143,255,0.15)" }}>{dtype}</span>
+                        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.3)", marginLeft: 4 }}>
+                          {deal.source_name} · {formatDiscovered(deal.discovered_at)}
+                        </span>
                       </div>
                     </div>
+
+                    {/* Price */}
                     <div>
                       {deal.deal_price
-                        ? <span style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,0.88)" }}>{deal.deal_price}</span>
-                        : <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.12)", fontStyle: "italic" }}>Undisclosed</span>}
+                        ? <span style={{ fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>{deal.deal_price}</span>
+                        : <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.25)", fontStyle: "italic" }}>Undisclosed</span>}
                     </div>
+
+                    {/* Date */}
                     <div>
                       {deal.deal_date
-                        ? <span style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.6)" }}>{formatDealDate(deal.deal_date)}</span>
-                        : <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.12)", fontStyle: "italic" }}>Not available</span>}
+                        ? <span style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.7)" }}>{formatDealDate(deal.deal_date)}</span>
+                        : <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.25)", fontStyle: "italic" }}>Not available</span>}
                     </div>
+
+                    {/* Score */}
                     <div style={{ display: "flex", justifyContent: "center" }}>
-                      <ConfidenceRing value={deal.confidence} />
+                      <ConfidenceRing value={deal.confidence} delay={idx * 70} />
                     </div>
                   </div>
 
+                  {/* Expanded */}
                   {isExpanded && (
-                    <div style={{ padding: "0 24px 24px", animation: "fadeUp 0.3s ease forwards" }}>
-                      <div style={{ background: "rgba(255,255,255,0.015)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.03)", padding: 20 }}>
-                        <p style={{ fontSize: 13.5, lineHeight: 1.75, color: "rgba(255,255,255,0.5)", marginBottom: 20 }}>{deal.summary}</p>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
-                          {[
-                            { label: "Buyer", val: deal.buyer },
-                            { label: "Target", val: deal.seller },
-                            { label: "Deal Value", val: deal.deal_price },
-                            { label: "Close Date", val: formatDealDate(deal.deal_date) },
-                          ].map((f) => (
-                            <div key={f.label}>
-                              <div className="data-label">{f.label}</div>
-                              <div className={`data-value ${!f.val ? "muted" : ""}`}>{f.val || "Undisclosed"}</div>
-                            </div>
-                          ))}
-                        </div>
-                        {deal.source_url && deal.source_url !== "#" && (
-                          <a href={deal.source_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "#63dcbe", textDecoration: "none", fontFamily: "'DM Mono', monospace", letterSpacing: 0.5, opacity: 0.7, transition: "opacity 0.2s" }}
-                            onMouseOver={(e) => e.currentTarget.style.opacity = 1} onMouseOut={(e) => e.currentTarget.style.opacity = 0.7}>
-                            View source ↗
-                          </a>
-                        )}
+                    <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid rgba(79,143,255,0.08)", animation: "fadeUp 0.4s ease forwards" }}>
+                      <p style={{ fontSize: 14, lineHeight: 1.8, color: "rgba(255,255,255,0.6)", marginBottom: 22, maxWidth: 700 }}>{deal.summary}</p>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14, marginBottom: 18 }}>
+                        {[
+                          { label: "Buyer", val: deal.buyer },
+                          { label: "Target", val: deal.seller },
+                          { label: "Deal Value", val: deal.deal_price },
+                          { label: "Close Date", val: formatDealDate(deal.deal_date) },
+                        ].map((f) => (
+                          <div key={f.label} style={{
+                            padding: "12px 16px", borderRadius: 8,
+                            background: "rgba(79,143,255,0.03)", border: "1px solid rgba(79,143,255,0.06)",
+                          }}>
+                            <div style={{
+                              fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, letterSpacing: 1.5,
+                              textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginBottom: 6,
+                            }}>{f.label}</div>
+                            <div style={{
+                              fontSize: 13, fontWeight: f.val ? 600 : 400, color: f.val ? "#fff" : "rgba(255,255,255,0.25)",
+                              fontStyle: f.val ? "normal" : "italic",
+                            }}>{f.val || "Undisclosed"}</div>
+                          </div>
+                        ))}
                       </div>
+                      {deal.source_url && deal.source_url !== "#" && (
+                        <a href={deal.source_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 6,
+                            fontSize: 12, color: "#4f8fff", textDecoration: "none",
+                            fontWeight: 600, transition: "all 0.2s ease",
+                            padding: "6px 14px", borderRadius: 6,
+                            background: "rgba(79,143,255,0.06)",
+                            border: "1px solid rgba(79,143,255,0.12)",
+                          }}
+                          onMouseOver={(e) => { e.currentTarget.style.background = "rgba(79,143,255,0.12)"; e.currentTarget.style.borderColor = "rgba(79,143,255,0.25)"; }}
+                          onMouseOut={(e) => { e.currentTarget.style.background = "rgba(79,143,255,0.06)"; e.currentTarget.style.borderColor = "rgba(79,143,255,0.12)"; }}>
+                          View Source ↗
+                        </a>
+                      )}
                     </div>
                   )}
                 </div>
@@ -426,11 +637,15 @@ export default function App() {
 
         {/* Footer */}
         {hasLoaded && !loading && filtered.length > 0 && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 0", marginTop: 8, flexWrap: "wrap", gap: 8 }}>
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.1)", letterSpacing: 0.5 }}>
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "24px 0", marginTop: 12,
+            borderTop: "1px solid rgba(79,143,255,0.06)",
+          }}>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.25)" }}>
               {filtered.length} of {deals.length} deals · MI OH IL IN WI MN IA MO
             </span>
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.06)", letterSpacing: 0.5 }}>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.15)" }}>
               DealMonitor v1.0
             </span>
           </div>
@@ -438,11 +653,18 @@ export default function App() {
 
         {/* Empty state */}
         {!hasLoaded && !loading && (
-          <div style={{ textAlign: "center", padding: "100px 20px", animation: "fadeIn 0.8s ease" }}>
-            <div style={{ width: 64, height: 64, borderRadius: 16, margin: "0 auto 24px", background: "linear-gradient(135deg, rgba(99,220,190,0.08) 0%, rgba(59,130,246,0.06) 100%)", border: "1px solid rgba(99,220,190,0.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>◈</div>
-            <p style={{ fontSize: 17, fontWeight: 500, color: "rgba(255,255,255,0.4)", marginBottom: 6 }}>Ready to scan</p>
-            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.12)", maxWidth: 340, margin: "0 auto" }}>
-              Monitors Google News, PR Newswire, GlobeNewsWire, SEC EDGAR, and BizJournals for deal activity.
+          <div style={{ textAlign: "center", padding: "100px 20px", animation: "fadeIn 1s ease" }}>
+            <div style={{
+              width: 72, height: 72, borderRadius: 18, margin: "0 auto 28px",
+              background: "linear-gradient(135deg, rgba(79,143,255,0.1) 0%, rgba(46,213,115,0.08) 100%)",
+              border: "1px solid rgba(79,143,255,0.12)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 28, animation: "borderGlow 3s ease infinite",
+              boxShadow: "0 8px 32px rgba(79,143,255,0.1)",
+            }}>◈</div>
+            <p style={{ fontSize: 20, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 8 }}>Ready to scan</p>
+            <p style={{ fontSize: 14, color: "rgba(255,255,255,0.35)", maxWidth: 380, margin: "0 auto", lineHeight: 1.6 }}>
+              Five sources. Eight states. Majority control. Hit the button.
             </p>
           </div>
         )}
