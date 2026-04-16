@@ -635,9 +635,8 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
         {hasLoaded && !loading && deals.length > 0 && (
           <div style={{
             marginBottom: 28, padding: "24px", borderRadius: 12,
-            background: "linear-gradient(135deg, rgba(15,22,40,0.6) 0%, rgba(10,16,30,0.8) 100%)",
-            border: "1px solid rgba(79,143,255,0.08)",
-            animation: "fadeUp 0.6s ease 0.2s forwards", opacity: 0,
+            background: "linear-gradient(135deg, rgba(15,22,40,0.8) 0%, rgba(10,16,30,0.95) 100%)",
+            border: "1px solid rgba(79,143,255,0.15)",
             position: "relative", overflow: "hidden",
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
