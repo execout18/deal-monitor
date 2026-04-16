@@ -122,6 +122,83 @@ export default function App() {
   const [scanProgress, setScanProgress] = useState(0);
   const [scanPhase, setScanPhase] = useState("");
   const [region, setRegion] = useState("nationwide");
+  const [enrichments, setEnrichments] = useState({});
+  const [enrichingId, setEnrichingId] = useState(null);
+
+  // --- CSV Export ---
+  const exportCSV = () => {
+    const headers = ["Title", "Buyer", "Seller", "Deal Price", "Close Date", "Location", "Sector", "Deal Type", "Confidence", "Source", "Source URL", "Discovered"];
+    const rows = filtered.map((d) => [
+      `"${(d.title || "").replace(/"/g, '""')}"`,
+      `"${(d.buyer || "Undisclosed").replace(/"/g, '""')}"`,
+      `"${(d.seller || "Undisclosed").replace(/"/g, '""')}"`,
+      d.deal_price || "Undisclosed",
+      d.deal_date || "N/A",
+      d.geo_match || "",
+      d.software_match || "",
+      dealTypeLabel(d.deal_match),
+      `${Math.round(d.confidence * 100)}%`,
+      d.source_name || "",
+      d.source_url || "",
+      d.discovered_at || "",
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `deal-monitor-${region}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // --- AI Deal Enrichment ---
+  const enrichDeal = async (deal, e) => {
+    e.stopPropagation();
+    if (enrichments[deal.id]) return; // Already enriched
+    setEnrichingId(deal.id);
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{
+            role: "user",
+            content: `Analyze this M&A deal announcement and extract structured intelligence. Be concise and factual. If information is not available, say "Not disclosed."
+
+TITLE: ${deal.title}
+SUMMARY: ${deal.summary}
+SOURCE: ${deal.source_name}
+
+Respond ONLY with a JSON object (no markdown, no backticks) with these fields:
+{
+  "buyer_name": "Full legal name of acquiring entity",
+  "buyer_type": "PE firm / Strategic / Management / Other",
+  "seller_name": "Full legal name of target company",
+  "seller_description": "1-2 sentence description of what the target does",
+  "deal_value": "Dollar amount if mentioned, otherwise Not disclosed",
+  "deal_structure": "Asset purchase / Stock purchase / Recapitalization / Merger / Not disclosed",
+  "deal_rationale": "1-2 sentence strategic rationale for the acquisition",
+  "sector": "Specific software sub-sector (e.g. Vertical SaaS, Cybersecurity, MSP)",
+  "estimated_revenue": "Target's estimated revenue if mentioned, otherwise Not disclosed",
+  "employee_count": "Number if mentioned, otherwise Not disclosed",
+  "key_insight": "One sentence that a buy-side M&A advisor would find most valuable about this deal"
+}`
+          }],
+        }),
+      });
+      const data = await response.json();
+      const text = data.content?.map((c) => c.text || "").join("") || "";
+      const cleaned = text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      setEnrichments((prev) => ({ ...prev, [deal.id]: parsed }));
+    } catch (err) {
+      setEnrichments((prev) => ({ ...prev, [deal.id]: { error: "Analysis failed — try again" } }));
+    }
+    setEnrichingId(null);
+  };
 
   const phases = ["Connecting to sources...", "Scanning Google News...", "Checking PR Newswire...", "Querying GlobeNewsWire...", "Searching BizJournals...", "Scoring & deduplicating..."];
 
@@ -461,10 +538,23 @@ export default function App() {
         </div>
 
         {/* Scan button + status */}
-        <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 16, animation: "fadeUp 0.8s ease 0.4s forwards", opacity: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, animation: "fadeUp 0.8s ease 0.4s forwards", opacity: 0, flexWrap: "wrap" }}>
           <button className="scan-btn" onClick={runScan} disabled={loading}>
             {loading ? "Scanning..." : "Run Scan"}
           </button>
+          {hasLoaded && !loading && filtered.length > 0 && (
+            <button onClick={exportCSV} style={{
+              background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.6)", padding: "14px 24px",
+              fontFamily: "'Sora', sans-serif", fontSize: 13, fontWeight: 600,
+              letterSpacing: 1, cursor: "pointer", borderRadius: 8,
+              transition: "all 0.25s ease", display: "flex", alignItems: "center", gap: 8,
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.borderColor = "rgba(79,143,255,0.25)"; e.currentTarget.style.color = "#fff"; }}
+            onMouseOut={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "rgba(255,255,255,0.6)"; }}>
+              ↓ Export CSV
+            </button>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {lastScan && !loading && (
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
@@ -640,21 +730,137 @@ export default function App() {
                           </div>
                         ))}
                       </div>
-                      {deal.source_url && deal.source_url !== "#" && (
-                        <a href={deal.source_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                          style={{
-                            display: "inline-flex", alignItems: "center", gap: 6,
-                            fontSize: 12, color: "#4f8fff", textDecoration: "none",
-                            fontWeight: 600, transition: "all 0.2s ease",
-                            padding: "6px 14px", borderRadius: 6,
-                            background: "rgba(79,143,255,0.06)",
-                            border: "1px solid rgba(79,143,255,0.12)",
-                          }}
-                          onMouseOver={(e) => { e.currentTarget.style.background = "rgba(79,143,255,0.12)"; e.currentTarget.style.borderColor = "rgba(79,143,255,0.25)"; }}
-                          onMouseOut={(e) => { e.currentTarget.style.background = "rgba(79,143,255,0.06)"; e.currentTarget.style.borderColor = "rgba(79,143,255,0.12)"; }}>
-                          View Source ↗
-                        </a>
+
+                      {/* AI Enrichment Section */}
+                      {!enrichments[deal.id] && enrichingId !== deal.id && (
+                        <button onClick={(e) => enrichDeal(deal, e)} style={{
+                          background: "linear-gradient(135deg, rgba(46,213,115,0.1) 0%, rgba(79,143,255,0.1) 100%)",
+                          border: "1px solid rgba(46,213,115,0.2)",
+                          color: "#2ed573", padding: "10px 20px", borderRadius: 8,
+                          fontFamily: "'Sora', sans-serif", fontSize: 12, fontWeight: 600,
+                          cursor: "pointer", transition: "all 0.25s ease",
+                          display: "flex", alignItems: "center", gap: 8, marginBottom: 14,
+                        }}
+                        onMouseOver={(e) => { e.currentTarget.style.borderColor = "rgba(46,213,115,0.4)"; e.currentTarget.style.boxShadow = "0 0 16px rgba(46,213,115,0.12)"; }}
+                        onMouseOut={(e) => { e.currentTarget.style.borderColor = "rgba(46,213,115,0.2)"; e.currentTarget.style.boxShadow = "none"; }}>
+                          <span style={{ fontSize: 14 }}>✦</span> Analyze with AI
+                        </button>
                       )}
+
+                      {enrichingId === deal.id && (
+                        <div style={{
+                          padding: "16px 20px", borderRadius: 10, marginBottom: 14,
+                          background: "linear-gradient(135deg, rgba(46,213,115,0.04) 0%, rgba(79,143,255,0.04) 100%)",
+                          border: "1px solid rgba(46,213,115,0.1)",
+                          display: "flex", alignItems: "center", gap: 12,
+                        }}>
+                          <div style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "2px solid rgba(46,213,115,0.3)",
+                            borderTopColor: "#2ed573",
+                            animation: "spin 0.8s linear infinite",
+                          }} />
+                          <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#2ed573" }}>
+                            Running AI analysis...
+                          </span>
+                          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                        </div>
+                      )}
+
+                      {enrichments[deal.id] && !enrichments[deal.id].error && (
+                        <div style={{
+                          borderRadius: 10, overflow: "hidden", marginBottom: 14,
+                          border: "1px solid rgba(46,213,115,0.12)",
+                          background: "linear-gradient(135deg, rgba(46,213,115,0.03) 0%, rgba(79,143,255,0.03) 100%)",
+                        }}>
+                          <div style={{
+                            padding: "10px 18px",
+                            background: "rgba(46,213,115,0.06)",
+                            borderBottom: "1px solid rgba(46,213,115,0.08)",
+                            display: "flex", alignItems: "center", gap: 8,
+                          }}>
+                            <span style={{ fontSize: 13 }}>✦</span>
+                            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: "#2ed573", fontWeight: 600 }}>
+                              AI-Enhanced Intelligence
+                            </span>
+                          </div>
+                          <div style={{ padding: "18px 18px 14px" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                              {[
+                                { label: "Buyer", val: enrichments[deal.id].buyer_name },
+                                { label: "Buyer Type", val: enrichments[deal.id].buyer_type },
+                                { label: "Target", val: enrichments[deal.id].seller_name },
+                                { label: "Sector", val: enrichments[deal.id].sector },
+                                { label: "Deal Value", val: enrichments[deal.id].deal_value },
+                                { label: "Structure", val: enrichments[deal.id].deal_structure },
+                                { label: "Est. Revenue", val: enrichments[deal.id].estimated_revenue },
+                                { label: "Employees", val: enrichments[deal.id].employee_count },
+                              ].map((f) => (
+                                <div key={f.label} style={{ padding: "8px 0" }}>
+                                  <div style={{
+                                    fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, letterSpacing: 1.2,
+                                    textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 4,
+                                  }}>{f.label}</div>
+                                  <div style={{
+                                    fontSize: 13, fontWeight: 500,
+                                    color: (f.val && !f.val.includes("Not disclosed")) ? "#fff" : "rgba(255,255,255,0.25)",
+                                    fontStyle: (f.val && !f.val.includes("Not disclosed")) ? "normal" : "italic",
+                                  }}>{f.val || "Not disclosed"}</div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {enrichments[deal.id].seller_description && (
+                              <div style={{ marginBottom: 12, padding: "12px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
+                                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, letterSpacing: 1.2, textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 6 }}>Target Description</div>
+                                <div style={{ fontSize: 13, lineHeight: 1.7, color: "rgba(255,255,255,0.7)" }}>{enrichments[deal.id].seller_description}</div>
+                              </div>
+                            )}
+
+                            {enrichments[deal.id].deal_rationale && (
+                              <div style={{ marginBottom: 12, padding: "12px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
+                                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, letterSpacing: 1.2, textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 6 }}>Deal Rationale</div>
+                                <div style={{ fontSize: 13, lineHeight: 1.7, color: "rgba(255,255,255,0.7)" }}>{enrichments[deal.id].deal_rationale}</div>
+                              </div>
+                            )}
+
+                            {enrichments[deal.id].key_insight && (
+                              <div style={{ padding: "12px 14px", borderRadius: 8, background: "rgba(46,213,115,0.04)", border: "1px solid rgba(46,213,115,0.1)" }}>
+                                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, letterSpacing: 1.2, textTransform: "uppercase", color: "#2ed573", marginBottom: 6 }}>Key Insight</div>
+                                <div style={{ fontSize: 13, lineHeight: 1.7, color: "rgba(255,255,255,0.8)", fontWeight: 500 }}>{enrichments[deal.id].key_insight}</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {enrichments[deal.id]?.error && (
+                        <div style={{
+                          padding: "12px 18px", borderRadius: 8, marginBottom: 14,
+                          background: "rgba(255,92,92,0.05)", border: "1px solid rgba(255,92,92,0.12)",
+                          fontSize: 12, color: "#ff8a8a",
+                        }}>
+                          {enrichments[deal.id].error}
+                        </div>
+                      )}
+
+                      <div style={{ display: "flex", gap: 10 }}>
+                        {deal.source_url && deal.source_url !== "#" && (
+                          <a href={deal.source_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: 6,
+                              fontSize: 12, color: "#4f8fff", textDecoration: "none",
+                              fontWeight: 600, transition: "all 0.2s ease",
+                              padding: "6px 14px", borderRadius: 6,
+                              background: "rgba(79,143,255,0.06)",
+                              border: "1px solid rgba(79,143,255,0.12)",
+                            }}
+                            onMouseOver={(e) => { e.currentTarget.style.background = "rgba(79,143,255,0.12)"; e.currentTarget.style.borderColor = "rgba(79,143,255,0.25)"; }}
+                            onMouseOut={(e) => { e.currentTarget.style.background = "rgba(79,143,255,0.06)"; e.currentTarget.style.borderColor = "rgba(79,143,255,0.12)"; }}>
+                            View Source ↗
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
